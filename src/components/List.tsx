@@ -327,7 +327,7 @@ export const List = () => {
                 <Box display="flex" flexDirection="column">
                     <TextField
                         sx={{ alignSelf: 'end' }}
-                        variant="filled"
+                        variant="standard"
                         label="Search"
                         onChange={(e) => setSearchText(e.target.value)}
                         style={{ marginBottom: '.5rem' }}

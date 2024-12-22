@@ -1,0 +1,75 @@
+.ek-form {
+  input[type=text], .print-input-text, input[type=tel], input[type=password], input[type=url], input[type=email], input[type=file],
+  input[type=date], input[type=month], input[type=time], input[type=datetime-local], input[type=number], input.number-input, select, textarea {
+    padding: 1.3rem;
+    font-size: 1rem;
+  }
+
+  .question button.btn-default.dropdown-toggle {
+    padding: .8rem;
+    font-size: 1rem;
+  }
+
+  span.required {
+    top: 0;
+    color: red;
+  }
+
+  span.question-label {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  .or-group h4 span.question-label {
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+
+  .or-group:not(.or-appearance-no-collapse) > h4::before {
+    top: 0.75rem;
+  }
+
+  .or-group:not(.or-appearance-no-collapse).or-appearance-compact > h4::before {
+    top: 6px;
+  }
+
+  .or-group {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 1.5rem;
+    row-gap: 1.5rem;
+
+    h4:first-child, fieldset.question {
+      flex: 1 1 100%;
+    }
+
+    h4:first-child {
+      border-bottom: 1px solid #ccc;
+    }
+
+    label.question {
+      margin: 0;
+      padding: 0;
+      flex: 1 1 calc(50% - 1.5rem);
+    }
+
+  }
+
+  .or-repeat {
+    border-radius: .5rem;
+
+    label.question {
+      margin: 1rem 1.5rem;
+    }
+  }
+
+}
+
+.datepicker {
+  padding: 1rem;
+
+  .datepicker-switch {
+    margin-bottom: .5rem;
+  }
+}

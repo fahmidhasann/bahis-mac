@@ -191,12 +191,18 @@ export const EnketoForm: React.FC<EnketoFormProps> = ({ formUID, formODKXML, ins
     return (
         <Stack className="ek-form" sx={{ margin: '2rem 3rem' }}>
             <div ref={formEl}></div>
-            <Box>
+            <Box sx={{ display: 'flex', gap: '1rem' }}>
                 {editable && (
                     <>
-                        <Button onClick={onCancel}>Cancel</Button>
-                        <Button onClick={onReset}>Reset</Button>
-                        <Button onClick={onSubmit}>Submit</Button>
+                        <Button variant="contained" color="error" size="large" onClick={onCancel}>
+                            Cancel
+                        </Button>
+                        <Button variant="contained" color="info" size="large" onClick={onReset}>
+                            Reset
+                        </Button>
+                        <Button variant="contained" color="success" size="large" onClick={onSubmit}>
+                            Submit
+                        </Button>
                         {instanceID && <Button onClick={onDelete}>Delete Draft</Button>}
                     </>
                 )}
