@@ -9,6 +9,10 @@
   productName: 'BAHIS',
   executableName: 'bahis',
   asar: true,
+  asarUnpack: [
+    'node_modules/better-sqlite3/**'
+  ],
+  npmRebuild: true,
   directories: {
     output: 'release/${version}',
     buildResources: 'public'
@@ -18,9 +22,34 @@
     'dist'
   ],
   extraFiles: [
-    "public/**/*",
-    'node_modules/better-sqlite3/build/Release/better_sqlite3.node'
+    'public/**/*'
   ],
+  mac: {
+    executableName: 'BAHIS',
+    target: [
+      {
+        target: 'dmg',
+        arch: [
+          'arm64'
+        ]
+      },
+      {
+        target: 'dir',
+        arch: [
+          'arm64'
+        ]
+      }
+    ],
+    icon: './public/icon.icns',
+    category: 'public.app-category.medical',
+    artifactName: '${productName}_${version}_mac_arm64.${ext}',
+    identity: '-',
+    hardenedRuntime: true,
+    entitlements: './public/entitlements.mac.plist',
+    entitlementsInherit: './public/entitlements.mac.plist',
+    gatekeeperAssess: false,
+    notarize: false
+  },
   win: {
     target: [
       {

@@ -11,9 +11,15 @@ import { setStatus, Toast } from './utils.ts';
 const parser = new Xml2Js.Parser();
 
 export const APP_VERSION = app.getVersion();
-export const BAHIS_SERVER_URL = import.meta.env.VITE_BAHIS_SERVER_URL || 'http://localhost:3001';
-const BAHIS_KOBOTOOLBOX_KF_API_URL = import.meta.env.VITE_BAHIS_KOBOTOOLBOX_KF_API_URL || 'http://kf.localhost:80/api/v2/';
-const BAHIS_KOBOTOOLBOX_KC_API_URL = import.meta.env.VITE_BAHIS_KOBOTOOLBOX_KC_API_URL || 'http://kc.localhost:80/api/v1/';
+const isProduction = import.meta.env.MODE === 'production';
+export const BAHIS_SERVER_URL =
+    import.meta.env.VITE_BAHIS_SERVER_URL || (isProduction ? 'https://bman.dls.gov.bd' : 'http://localhost:3001');
+const BAHIS_KOBOTOOLBOX_KF_API_URL =
+    import.meta.env.VITE_BAHIS_KOBOTOOLBOX_KF_API_URL ||
+    (isProduction ? 'https://bf.dls.gov.bd/api/v2/' : 'http://kf.localhost:80/api/v2/');
+const BAHIS_KOBOTOOLBOX_KC_API_URL =
+    import.meta.env.VITE_BAHIS_KOBOTOOLBOX_KC_API_URL ||
+    (isProduction ? 'https://bcat.dls.gov.bd/api/v1/' : 'http://kc.localhost:80/api/v1/');
 log.info(`BAHIS_SERVER_URL=${BAHIS_SERVER_URL} (BAHIS 3)`);
 
 const _url = (url, time?) => {

@@ -1,12 +1,13 @@
 import axios from 'axios';
 import csv from 'csv-parser';
-import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import firstRun from 'electron-first-run'; // could this eventually be removed too?
 import { autoUpdater, UpdateDownloadedEvent } from 'electron-updater';
 import { createReadStream } from 'fs';
 import path from 'node:path';
 import { create } from 'xmlbuilder2';
 import { createLocalDatabase, createOrReadLocalDatabase, createUserInLocalDatabase, deleteLocalDatabase } from './localDB';
+import { LOG_FILE_PATH } from './appPaths';
 import { log } from './log';
 import {
     BAHIS_SERVER_URL,
@@ -30,7 +31,11 @@ process.env.DIST = path.join(__dirname, '../dist');
 process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public');
 
 const APP_VERSION = app.getVersion();
-const BAHIS2_SERVER_URL = import.meta.env.VITE_BAHIS2_SERVER_URL || 'http://localhost:80';
+const BAHIS2_SERVER_URL =
+    import.meta.env.VITE_BAHIS2_SERVER_URL ||
+    (import.meta.env.MODE === 'production' ? 'https://bahis.dls.gov.bd' : 'http://localhost:80');
+const RELEASES_URL = 'https://github.com/chameleonhub/chameleon-workstation/releases';
+const isMac = process.platform === 'darwin';
 
 // default environment variables, i.e. for local development
 export const MODE = import.meta.env.MODE || 'development';
@@ -58,7 +63,7 @@ switch (MODE) {
 // logging setup
 autoUpdater.logger = log;
 log.info(`Using the following log settings: console=${log.transports[0].level}; file=${log.transports[1].level}}`);
-log.info(`Full debug logs can be found in ${path.join(process.env.DIST, 'electron-debug.log')}`);
+log.info(`Full debug logs can be found in ${LOG_FILE_PATH}`);
 
 // MIGRATION
 // The following code migrates user data from bahis-desk <=v2.3.0
@@ -130,6 +135,11 @@ const createWindow = () => {
 };
 
 const autoUpdateBahis = () => {
+    if (process.platform !== 'win32') {
+        log.info('Automatic application updates are disabled on this platform.');
+        return;
+    }
+
     autoUpdater.setFeedURL({
         provider: 'github',
         owner: 'chameleonhub',
@@ -138,7 +148,10 @@ const autoUpdateBahis = () => {
 
     log.info('Checking for the app software updates call');
     if (MODE !== 'development') {
-        autoUpdater.checkForUpdatesAndNotify();
+        void autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+            log.error('Automatic update check failed:');
+            log.error(error);
+        });
     } else {
         log.info('Not checking for updates in dev mode');
     }
@@ -176,8 +189,6 @@ app.on('window-all-closed', () => {
     app.quit();
 });
 
-const isMac = process.platform === 'darwin';
-
 const template: Electron.MenuItemConstructorOptions[] = [
     // { role: 'fileMenu' }
     {
@@ -210,25 +221,33 @@ const template: Electron.MenuItemConstructorOptions[] = [
                     });
                 },
             },
-            {
-                label: 'Manually update app',
-                click: () => {
-                    try {
-                        autoUpdater.checkForUpdatesAndNotify();
-                    } catch (error) {
-                        log.error('Manual update app FAILED with:');
-                        log.error(error);
-                        const browserWindow = BrowserWindow.getFocusedWindow();
-                        if (browserWindow) {
-                            dialog.showMessageBox(browserWindow, {
-                                title: 'Update failed',
-                                message: `Update failed with ${error}`,
-                                type: 'warning',
-                            });
-                        }
-                    }
-                },
-            },
+            isMac
+                ? {
+                      label: 'View official releases',
+                      click: () => {
+                          void shell.openExternal(RELEASES_URL).catch((error) => {
+                              log.error('Could not open the official releases page:');
+                              log.error(error);
+                          });
+                      },
+                  }
+                : {
+                      label: 'Manually update app',
+                      click: () => {
+                          void autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+                              log.error('Manual update app FAILED with:');
+                              log.error(error);
+                              const browserWindow = BrowserWindow.getFocusedWindow();
+                              if (browserWindow) {
+                                  void dialog.showMessageBox(browserWindow, {
+                                      title: 'Update failed',
+                                      message: `Update failed with ${error}`,
+                                      type: 'warning',
+                                  });
+                              }
+                          });
+                      },
+                  },
             isMac ? { role: 'close' } : { role: 'quit' },
         ],
     },

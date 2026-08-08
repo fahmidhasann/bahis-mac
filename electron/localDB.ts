@@ -1,17 +1,8 @@
 import Database from 'better-sqlite3';
 import { app } from 'electron';
 import { existsSync, unlinkSync } from 'fs';
-import { createRequire } from 'module';
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
 import { log } from './log';
-
-// 2023-08-21 the following options are a fix for using rollup (within vite) with better-sqlite3
-const __filename = fileURLToPath(import.meta.url);
-const requireMe = createRequire(pathToFileURL(__filename).href);
-const addon = requireMe(
-    path.resolve('./node_modules/better-sqlite3/build/Release/better_sqlite3.node').replace(/(\.node)?$/, '.node'),
-);
 
 const DB_PATH = (MODE) => {
     if (MODE === 'production') {
@@ -23,7 +14,7 @@ const DB_PATH = (MODE) => {
 
 export const createLocalDatabase = (MODE) => {
     log.info(`CREATE clean local database at ${DB_PATH(MODE)}`);
-    const db = new Database(DB_PATH(MODE), { nativeBinding: addon });
+    const db = new Database(DB_PATH(MODE));
 
     log.info('Running initialisation');
     try {
@@ -45,7 +36,7 @@ export const createOrReadLocalDatabase = (MODE) => {
         db = createLocalDatabase(MODE);
     } else {
         log.info(`Using existing local database at ${DB_PATH(MODE)}`);
-        db = new Database(DB_PATH(MODE), { nativeBinding: addon });
+        db = new Database(DB_PATH(MODE));
     }
 
     return db;

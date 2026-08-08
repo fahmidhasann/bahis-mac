@@ -1,4 +1,5 @@
 import { createLogger, format, transports } from 'winston';
+import { LOG_FILE_PATH } from './appPaths';
 
 export const log = createLogger({
     transports: [
@@ -14,7 +15,7 @@ export const log = createLogger({
             ),
         }),
         new transports.File({
-            filename: 'electron-debug.log',
+            filename: LOG_FILE_PATH,
             level: 'silly',
             maxsize: 1048576,
             maxFiles: 1,

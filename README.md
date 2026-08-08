@@ -1,15 +1,39 @@
 # BAHIS-desk
 
+## Native Apple Silicon build
+
+The macOS build runs directly on Apple Silicon and does not use Wine, Rosetta, or a virtual machine.
+
+Install Node.js 22.23.2 (for example with `fnm`). Then run these commands from the repository root so
+the version manager can read `.nvmrc`:
+
+```bash
+fnm use --install-if-missing
+npm ci
+npm run build:mac
+```
+
+The generated application and DMG are written to `release/3.0.4/`. The local build is ad-hoc signed for
+personal use and is not notarized for public distribution. Application data is stored in
+`~/Library/Application Support/bahis/`, including `bahis3.db` and `electron-debug.log`.
+
+Automatic application updates are disabled on macOS because the official update feed currently publishes
+Windows packages only. Use **File > View official releases** and rebuild from a newer official source tag when
+one becomes available.
+
+To migrate an existing database, close both BAHIS installations, back up `bahis3.db`, and then copy it to
+`~/Library/Application Support/bahis/bahis3.db` before starting the Mac application.
+
 ## Local Development - Setup
 
 ### Linux
 
-We need node v18 - the latest LTS. On linux a convenient way is to use Node Version
+Use Node 22.23.2, as pinned in `.nvmrc`. On Linux a convenient way is to use Node Version
 Manager (https://github.com/nvm-sh/nvm)
 
 ```bash
-nvm install lts/hydrogen
-nvm use lts/hydrogen
+nvm install 22.23.2
+nvm use 22.23.2
 ```
 
 Next, in your shell, change directory to the bahis-desk project and run:
@@ -21,8 +45,7 @@ npm run dev
 
 ### Windows
 
-On Windows install node direct from their website, or by
-clicking [here](https://nodejs.org/dist/v18.17.1/node-v18.17.1-x64.msi).
+On Windows install Node 22.23.2 directly from the Node.js website.
 
 Please tick to install all additional tools with "chocolatey" that should cover all of the other requirements (visual
 studio, python etc.)
