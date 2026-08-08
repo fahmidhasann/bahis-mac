@@ -1,5 +1,12 @@
 # BAHIS-desk
 
+This repository is Fahmid Hasan Taohid's private Apple Silicon development line of the GPL-3.0 BAHIS desktop
+application. The original project history and authorship are preserved. The personal repository is `origin`, while
+`upstream` points to `chameleonhub/chameleon-workstation` and has pushing disabled.
+
+Development is performed by one developer on macOS with ChatGPT Codex. Repository instructions for Codex are in
+[`AGENTS.md`](./AGENTS.md). GitHub is used for private source control and backup, not as a team-development workflow.
+
 ## Native Apple Silicon build
 
 The macOS build runs directly on Apple Silicon and does not use Wine, Rosetta, or a virtual machine.
@@ -10,12 +17,14 @@ the version manager can read `.nvmrc`:
 ```bash
 fnm use --install-if-missing
 npm ci
+npm run check
 npm run build:mac
 ```
 
 The generated application and DMG are written to `release/3.0.4/`. The local build is ad-hoc signed for
 personal use and is not notarized for public distribution. Application data is stored in
-`~/Library/Application Support/bahis/`, including `bahis3.db` and `electron-debug.log`.
+`~/Library/Application Support/bahis/`. Production uses `bahis3.db`, development uses
+`bahis3_development.db`, and both modes write diagnostic information to `electron-debug.log`.
 
 Automatic application updates are disabled on macOS because the official update feed currently publishes
 Windows packages only. Use **File > View official releases** and rebuild from a newer official source tag when
@@ -25,6 +34,37 @@ To migrate an existing database, close both BAHIS installations, back up `bahis3
 `~/Library/Application Support/bahis/bahis3.db` before starting the Mac application.
 
 ## Local Development - Setup
+
+### macOS
+
+Run all development commands from this repository directory:
+
+```bash
+fnm use --install-if-missing
+npm ci
+npm run dev
+```
+
+Development mode expects local BAHIS and Kobo services by default. Override them in an ignored `.env.local` file when
+using different endpoints. Never commit that file or any credentials.
+
+Before committing a change, run:
+
+```bash
+npm run check
+npm audit
+```
+
+For changes that affect Electron, native modules, or packaging, also run `npm run build:mac`.
+
+### Known dependency follow-up
+
+The readiness baseline has no critical or high npm audit findings. Two moderate React Router findings remain and require
+a planned React Router 7 migration. Do not run `npm audit fix --force`; it may introduce breaking framework changes.
+
+Enketo currently declares support through Node 20 and prefers Yarn, while this proven Apple Silicon build uses the
+project-pinned Node 22.23.2 and npm. Treat the resulting engine messages as known warnings and re-run the form workflow
+smoke tests whenever Enketo, Node.js, or the XML dependency overrides change.
 
 ### Linux
 
@@ -39,7 +79,7 @@ nvm use 22.23.2
 Next, in your shell, change directory to the bahis-desk project and run:
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -124,16 +164,16 @@ npm run build
 
 ## Configuration
 
-We have three `.env` files:
+The application supports three `.env` files:
 
 - `.env` - for local development
 - `.env.staging` - for staging builds
 - `.env.production` - for production builds
 
-Note that all variables in `.env` files should follow the naming format of: `VITE_[SCOPE]_[REALLY_USEFUL_NAME]`, where
-`SCOPE` is on of [`BAHIS`, `ELECTRON`, `REACT`] depending on whether it defines how the system interacts with the BAHIS
+All variables in `.env` files should follow the naming format `VITE_[SCOPE]_[REALLY_USEFUL_NAME]`, where
+`SCOPE` is one of [`BAHIS`, `ELECTRON`, `REACT`] depending on whether it defines how the system interacts with the BAHIS
 server, the electron main process, or the react renderer process.
-Once variables are read into the code they can loose the `VITE_` prefix, e.g. `VITE_BAHIS2_SERVER_URL` becomes
+Once variables are read into the code they lose the `VITE_` prefix, e.g. `VITE_BAHIS2_SERVER_URL` becomes
 `BAHIS2_SERVER_URL`.
 
 ### Locally overriding environment variables

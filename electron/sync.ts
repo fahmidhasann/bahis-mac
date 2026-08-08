@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
-import { DOMParser } from 'xmldom';
+import { DOMParser } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import { log } from './log';
 import { auth } from '../conf/axios.ts';
@@ -243,8 +243,9 @@ const insertCloudSubmission = async (db, url: string, form = { name: '' }, count
         .get(url)
         .then(async (response) => {
             const doc = new DOMParser().parseFromString(response.data, 'text/xml');
+            const xpathDocument = doc as unknown as Node;
 
-            const results = xpath.select('/root/results', doc, true) as Node;
+            const results = xpath.select('/root/results', xpathDocument, true) as Node;
 
             if (results) {
                 const insertTransaction = db.transaction((data: CloudFormData[]) => {
@@ -285,7 +286,7 @@ const insertCloudSubmission = async (db, url: string, form = { name: '' }, count
                 Toast('No new data received', 'info');
                 log.warn('No results received from server');
             }
-            const next = xpath.select('/root/next', doc, true) as Node;
+            const next = xpath.select('/root/next', xpathDocument, true) as Node;
             if (next && next.textContent != 'None') {
                 await insertCloudSubmission(db, next.textContent as string, form, count + data.length);
                 console.log(count);

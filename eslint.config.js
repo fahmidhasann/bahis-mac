@@ -14,6 +14,11 @@ export default [
     pluginReact.configs.flat.recommended,
     eslintPluginPrettierRecommended,
     {
+        settings: {
+            react: {
+                version: 'detect',
+            },
+        },
         plugins: {
             'react-refresh': reactRefresh,
             'react-hooks': eslintPluginReactHooks,
