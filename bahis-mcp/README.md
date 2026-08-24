@@ -134,8 +134,13 @@ ln -sfn "$PWD/cli.sh" ~/.local/bin/bahis
 resolves (one line, run once in PowerShell):
 
 ```powershell
-[Environment]::SetEnvironmentVariable('Path', "$env:Path;$PWD", 'User')
+$old = [Environment]::GetEnvironmentVariable('Path', 'User')
+[Environment]::SetEnvironmentVariable('Path', "$old;$PWD", 'User')
 ```
+
+Read the *User* Path, not `$env:Path`. The latter is the User and Machine paths already
+merged, so writing it back copies every system entry into the user's own Path - a mess that
+is awkward to unpick later. Then open a new terminal for the change to take effect.
 
 Either way the command is then just `bahis`, which is what the skill and every agent calls.
 
