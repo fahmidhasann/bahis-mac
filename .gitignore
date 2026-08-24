@@ -30,3 +30,6 @@ release
 .env
 .env.*
 !/.env.example
+
+# stray copy of dist-electron/main.js from an early Mac-port debug session
+/main.js

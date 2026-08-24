@@ -150,6 +150,7 @@ export const Header = () => {
             })
             .catch((error) => {
                 log.error(`Error syncing drafts: ${error}`);
+                dispatch(OpenToast({ type: 'error', text: `Unable to sync drafts: ${error.message}` }));
                 setWaitingForDataSync(false);
             })
             .finally(() => {
@@ -164,8 +165,13 @@ export const Header = () => {
         setWaitingForDataSync(true);
         ipcRenderer
             .invoke('request-app-data-sync')
-            .then(() => {
-                dispatch(OpenToast('Update data SUCCESS'));
+            .then((result) => {
+                if (result?.warnings?.length) {
+                    const slugs = result.warnings.map(({ slug }) => slug).join(', ');
+                    dispatch(OpenToast({ type: 'warning', text: `Data updated with warnings: ${slugs}` }));
+                } else {
+                    dispatch(OpenToast('Update data SUCCESS'));
+                }
             })
             .catch((error) => {
                 dispatch(OpenToast({ type: 'error', text: 'Unable to update data' + error.message }));

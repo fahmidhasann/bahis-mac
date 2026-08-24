@@ -19,6 +19,7 @@ import { AlertContent } from './SystemAlerts';
 import { grey } from '@mui/material/colors';
 import bahisLogo from '../assets/images/bahis_logo.png';
 import { LoadingSpinner } from './LoadingSpinner.tsx';
+import { countPendingDrafts, pendingDraftsMessage } from './pendingDrafts.ts';
 
 interface UserData {
     username: string;
@@ -33,6 +34,8 @@ export const SignIn = () => {
     const [userData, setUserData] = React.useState<UserData>();
     const [userName, setUserName] = React.useState<string>('');
     const [isFreshSignedIn, setIsFreshSignedIn] = React.useState<boolean>(false);
+    // null means the count could not be read, which is not the same as zero.
+    const [pendingDrafts, setPendingDrafts] = React.useState<number | null>(0);
 
     const navigate = useNavigate();
 
@@ -75,6 +78,22 @@ export const SignIn = () => {
 
     const handleChangeUserConfirmation = async (answer) => {
         if (answer === 'delete') {
+            // Re-check rather than trusting the dialog state: this wipe is irreversible.
+            const pending = await countPendingDrafts(ipcRenderer).catch((error) => {
+                log.error(`Error counting unsynced drafts: ${error}`);
+                return null;
+            });
+            if (pending === null || pending > 0) {
+                setPendingDrafts(pending);
+                setAlertContent({
+                    severity: 'error',
+                    message:
+                        pending === null
+                            ? 'Could not check for unsynced data, so the database was not deleted.'
+                            : pendingDraftsMessage(pending),
+                });
+                return;
+            }
             setIsSignedInValid(false);
             setUserName('No User');
             ipcRenderer.invoke('refresh-database').then(() => {
@@ -91,10 +110,12 @@ export const SignIn = () => {
 
     interface ChangeUserDialogProps {
         open: boolean;
+        pendingDrafts: number | null;
         handleClick: (type: string) => void;
     }
 
     const ChangeUserDialog = (props: ChangeUserDialogProps) => {
+        const blocked = props.pendingDrafts === null || props.pendingDrafts > 0;
         return (
             <Dialog open={props.open}>
                 <DialogTitle>Change of User Warning</DialogTitle>
@@ -103,9 +124,16 @@ export const SignIn = () => {
                         You are changing the local user. This will delete the previous user&apos;s data and replace it with the
                         new user&apos;s data. Are you sure you want to delete the data ?
                     </DialogContentText>
+                    {blocked && (
+                        <Alert severity="error" sx={{ marginTop: '1rem' }}>
+                            {props.pendingDrafts === null
+                                ? 'Could not check for unsynced data. Please sync and try again.'
+                                : pendingDraftsMessage(props.pendingDrafts)}
+                        </Alert>
+                    )}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => props.handleClick('delete')} color="error">
+                    <Button onClick={() => props.handleClick('delete')} color="error" disabled={blocked}>
                         Delete entire database!
                     </Button>
                     <Button onClick={() => props.handleClick('no')} autoFocus>
@@ -143,6 +171,13 @@ export const SignIn = () => {
                         severity: 'warning',
                         message: 'You requested a change of user database.',
                     });
+                    // Surface un-uploaded work before offering to wipe it.
+                    countPendingDrafts(ipcRenderer)
+                        .then(setPendingDrafts)
+                        .catch((error) => {
+                            log.error(`Error counting unsynced drafts: ${error}`);
+                            setPendingDrafts(null);
+                        });
                     setOpenChangeUserDialog(true);
                     setIsSignedIn(false);
                     break;
@@ -288,7 +323,11 @@ export const SignIn = () => {
                     {alertContent && isSignedIn && isFreshSignedIn && <LoadingSpinner loadingText={alertContent.message} />}
                 </Box>
             </Box>
-            <ChangeUserDialog open={openChangeUserDialog} handleClick={(event) => handleChangeUserConfirmation(event)} />
+            <ChangeUserDialog
+                open={openChangeUserDialog}
+                pendingDrafts={pendingDrafts}
+                handleClick={(event) => handleChangeUserConfirmation(event)}
+            />
         </>
     );
 };

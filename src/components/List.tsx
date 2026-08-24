@@ -1,10 +1,11 @@
 import { Box, TextField, Tooltip, Typography } from '@mui/material';
 import { DataGrid, GridActionsCellItem, GridColDef, GridColumnVisibilityModel, GridToolbar } from '@mui/x-data-grid';
 import PostAddIcon from '@mui/icons-material/PostAdd';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { log } from '../helpers/log';
 import { ipcRenderer } from 'electron';
 import { useNavigate, useParams } from 'react-router-dom';
+import { subscribeToSubmissionSync } from './submissionSyncRefresh.ts';
 
 // const GROUPS_TO_SHOW = ['basic_info'];
 const FIELDS_TO_HIDE = ['division', 'district', 'upazila']; // FIXME move out to some sort of config}
@@ -292,12 +293,11 @@ export const List = () => {
         }
     }, [form_uid, form, workflows, navigate]);
 
-    // parse data as rows
-    useEffect(() => {
+    const loadRows = useCallback(() => {
         if (form_uid) {
             readFormData(form_uid)
                 .then((data) => {
-                    const jsonData = data.map((datum) => parseSubmissionsAsRows(datum));
+                    const jsonData = (data || []).map((datum) => parseSubmissionsAsRows(datum));
                     setRows(jsonData);
                 })
                 .catch((error) => {
@@ -306,6 +306,12 @@ export const List = () => {
                 });
         }
     }, [form_uid]);
+
+    // Load on navigation and refresh an already-open list after cloud sync.
+    useEffect(() => {
+        loadRows();
+        return subscribeToSubmissionSync(ipcRenderer, loadRows);
+    }, [loadRows]);
 
     const onRowClick = (event) => {
         log.debug(`row clicked: ${event.row.id}`);

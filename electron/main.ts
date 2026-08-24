@@ -216,8 +216,9 @@ const template: Electron.MenuItemConstructorOptions[] = [
             {
                 label: 'Sync app data',
                 click: () => {
-                    getAppData({
-                        type: 'manual-sync',
+                    void getAppData({ type: 'manual-sync' }).catch((error) => {
+                        log.error('Manual app-data sync FAILED with:');
+                        log.error(error);
                     });
                 },
             },
@@ -503,22 +504,32 @@ const getAppData = async (event) => {
     log.info('GET app data from server');
     log.debug(`due to ${event.type}`);
 
-    return await Promise.all([
-        getModules(db),
-        getWorkflows(db),
-        getForms(db).then(() => getFormCloudSubmissions(db)),
-        getTaxonomies(db),
-        getAdministrativeRegions(db),
-    ])
-        .then(() => {
+    try {
+        const submissionSync = getForms(db)
+            .then(() => getFormCloudSubmissions(db))
+            .then((result) => {
+                mainWindow?.webContents.send('form-submissions-synced', result);
+                return result;
+            });
+        const [, , submissionResult, taxonomyResult] = await Promise.all([
+            getModules(db),
+            getWorkflows(db),
+            submissionSync,
+            getTaxonomies(db),
+            getAdministrativeRegions(db),
+        ]);
+        const warnings = taxonomyResult.warnings;
+        if (warnings.length > 0) {
+            log.warn(`GET app data PARTIAL: ${warnings.map(({ slug }) => slug).join(', ')}`);
+        } else {
             log.info('GET app data SUCCESS');
-            return true;
-        })
-        .catch((error) => {
-            log.error('GET app data FAILED with:');
-            log.error(error);
-            throw error;
-        });
+        }
+        return { success: true, warnings, submissions: submissionResult };
+    } catch (error) {
+        log.error('GET app data FAILED with:');
+        log.error(error);
+        throw error;
+    }
 };
 
 const postGetUserData = async (event) => {
@@ -527,7 +538,9 @@ const postGetUserData = async (event) => {
 
     // BAHIS 3 data
     await postFormCloudSubmissions(db);
-    await getFormCloudSubmissions(db);
+    const result = await getFormCloudSubmissions(db);
+    mainWindow?.webContents.send('form-submissions-synced', result);
+    return result;
 };
 
 const readAdministrativeRegions = async (event) => {

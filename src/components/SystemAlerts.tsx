@@ -3,6 +3,7 @@ import { ipcRenderer } from 'electron';
 import { useNavigate } from 'react-router-dom';
 import { Alert } from '@mui/material';
 import { log } from '../helpers/log';
+import { countPendingDrafts, pendingDraftsMessage } from './pendingDrafts.ts';
 
 export interface AlertContent {
     severity: 'error' | 'warning' | 'info' | 'success';
@@ -21,21 +22,18 @@ export const SystemAlerts = () => {
     // respond to the user selecting Reset Database from the menu
     useEffect(() => {
         ipcRenderer.on('init-refresh-database', async () => {
-            ipcRenderer
-                .invoke('get-local-db', 'select count(*) from formlocaldraft')
-                .then((response) => {
-                    const unSyncData = response?.count || 0;
-
+            countPendingDrafts(ipcRenderer)
+                .then((unSyncData) => {
                     if (unSyncData > 0) {
                         setAlertContent({
                             severity: 'error',
-                            message: `${unSyncData} data unsynced! Please Sync first`,
+                            message: pendingDraftsMessage(unSyncData),
                         });
                     } else {
                         setAlertContent({
                             severity: 'success',
                             message: `Database will refresh shortly. You will be automatically logged out.
-                            Please login again and sync first. 
+                            Please login again and sync first.
                             It might take a while for the first sync. please be patient while syncing`,
                         });
 
@@ -46,7 +44,12 @@ export const SystemAlerts = () => {
                     }
                 })
                 .catch((error) => {
-                    log.error(`Error reading form definition: ${error}`);
+                    // Never fall through to the wipe: an unreadable draft count is not a zero count.
+                    log.error(`Error counting unsynced drafts: ${error}`);
+                    setAlertContent({
+                        severity: 'error',
+                        message: 'Could not check for unsynced data, so the database was not reset. Please try again.',
+                    });
                 });
         });
     }, [navigate]);

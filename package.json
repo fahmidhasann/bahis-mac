@@ -17,6 +17,8 @@
     "build:mac": "npm run build:app && electron-builder --mac --arm64",
     "build:win": "npm run build:app && electron-builder --win --x64",
     "build:dev": "tsc && vite build --mode development && electron-builder",
+    "test:form-hydration": "node --experimental-strip-types --test src/components/formHydration.test.ts",
+    "test:sync": "node --experimental-strip-types --test electron/cloudSubmissionParse.test.ts electron/downloadBatch.test.ts electron/submissionSyncCore.test.ts electron/taxonomyStorage.test.ts src/components/pendingDrafts.test.ts src/components/submissionSyncRefresh.test.ts",
     "check": "npm run lint && npm run build:app",
     "lint": "npm run lint-electron && npm run lint-react",
     "lint-electron": "eslint electron --report-unused-disable-directives",

@@ -5,6 +5,7 @@ import { ipcRenderer } from 'electron';
 import { EnketoForm } from './EnketoForm';
 import { Footer } from './EnketoFooter';
 import { LoadingSpinner } from './LoadingSpinner.tsx';
+import { hydrateDeskTaxonomyInstances, prefillFormXML } from './formHydration.ts';
 
 const readFormData = async (tableName: string, form_uid: string, instance_id?: string) => {
     log.info(`reading data from ${tableName} table...`);
@@ -33,16 +34,15 @@ interface FormProps {
 export const Form: React.FC<FormProps> = ({ draft }: FormProps) => {
     const [formXML, setFormXML] = useState<string>('');
     const [injectedData, setInjectedData] = useState<string>();
+    const [hydratedFormXML, setHydratedFormXML] = useState<string>('');
     const [prefilledFormXML, setPrefilledFormXML] = useState<string>('');
-    const [tableName, setTableName] = useState<string>('');
-    const [editable, setEditable] = useState<boolean>(true);
-    const [isDeskUserReplaced, setIsDeskUserReplaced] = useState<boolean>(false);
-    const [isDeskTaxonomyInserted, setIsDeskTaxonomyInserted] = useState<boolean>(false);
     const [isPrefilled, setIsPrefilled] = useState<boolean>(false);
 
     const { state } = useLocation();
 
     const { form_uid, instance_id } = useParams();
+    const tableName = draft ? 'formlocaldraft' : 'formcloudsubmission';
+    const editable = !(!draft && instance_id);
 
     // catch changing location state for injected data via workflow
     useEffect(() => {
@@ -51,24 +51,6 @@ export const Form: React.FC<FormProps> = ({ draft }: FormProps) => {
             setInjectedData(state.injectedData);
         }
     }, [state]);
-
-    // decide which data table to read from, e.g. submitted or cloud
-    useEffect(() => {
-        log.info('Deciding which data table to read from');
-        if (draft) {
-            setTableName('formlocaldraft');
-        } else {
-            setTableName('formcloudsubmission');
-        }
-    }, [draft]);
-
-    // if the form has been filled out previously, do we want to allow editing?
-    useEffect(() => {
-        if (!draft && instance_id) {
-            log.info('This is a cloud form, blocking editing.');
-            setEditable(false);
-        }
-    }, [draft, instance_id]);
 
     // read form defintion
     useEffect(() => {
@@ -96,222 +78,130 @@ export const Form: React.FC<FormProps> = ({ draft }: FormProps) => {
         }
     }, [form_uid]);
 
-    // replace deskUser and deskChoice tags in form definition
+    // Hydrate every dynamic taxonomy before saved values are applied. Cloud
+    // records remain read-only, but still need choices to resolve their labels.
     useEffect(() => {
-        log.info('Form definition changed');
+        let cancelled = false;
 
-        const replaceUserValues = (formXML: string) => {
+        const replaceUserValues = async (xml: string): Promise<string> => {
             log.info('Replacing deskUser tags in form definition');
             const parser = new DOMParser();
             const serializer = new XMLSerializer();
-
-            const doc = parser.parseFromString(formXML, 'application/xml');
+            const doc = parser.parseFromString(xml, 'application/xml');
 
             const elements = doc.getElementsByTagName('*');
+            const response = await ipcRenderer.invoke('read-user-administrative-region', 'asName');
+            const availableLevels = ['1', '2', '3'].filter((level) => typeof response?.[level] === 'string');
+            log.info(`Administrative region levels resolved: ${availableLevels.join(', ')}`);
 
-            let hasReplacements = false;
-            ipcRenderer
-                .invoke('read-user-administrative-region', 'asName')
-                .then((response) => {
-                    log.info(`Administrative region: ${JSON.stringify(response)}`);
-                    for (let i = 0; i < elements.length; i++) {
-                        if (elements[i].textContent?.startsWith('deskUser')) {
-                            switch (elements[i].textContent) {
-                                case 'deskUser.administrative_region_1':
-                                    log.debug(elements[i].textContent);
-                                    log.debug(response['1']);
-                                    elements[i].textContent = response['1'];
-                                    hasReplacements = true;
-                                    break;
-                                case 'deskUser.administrative_region_2':
-                                    elements[i].textContent = response['2'];
-                                    hasReplacements = true;
-                                    break;
-                                case 'deskUser.administrative_region_3':
-                                    elements[i].textContent = response['3'];
-                                    hasReplacements = true;
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-                    }
-                })
-                .finally(() => {
-                    if (hasReplacements) {
-                        setFormXML(serializer.serializeToString(doc));
-                        log.info('deskUser tags replaced successfully');
-                    } else {
-                        log.info('No deskUser tags found');
-                        setIsDeskUserReplaced(true);
-                        return;
-                    }
-                })
-                .catch((error) => {
-                    log.error(`Error getting administrative region: ${error}`);
-                });
-        };
-
-        const readTaxonomyChoices = (taxonomySlug: string) => {
-            log.info(`Reading taxonomy data for ${taxonomySlug}`);
-            const parser = new DOMParser();
-
-            if (taxonomySlug === 'administrative_region') {
-                return ipcRenderer
-                    .invoke('read-administrative-region-data')
-                    .then((data: string) => {
-                        return parser.parseFromString(data, 'application/xml');
-                    })
-                    .catch((error) => {
-                        log.error('Error reading administrative region data data');
-                        log.error(error);
-                        return null;
-                    });
-            } else {
-                return ipcRenderer
-                    .invoke('read-taxonomy-data', taxonomySlug)
-                    .then((data: string) => {
-                        return parser.parseFromString(data, 'application/xml');
-                    })
-                    .catch((error) => {
-                        log.error('Error reading taxonomy data');
-                        log.error(error);
-                        return null;
-                    });
-            }
-        };
-
-        const insertTaxonomyChoices = async (formXML: string) => {
-            log.info('Inserting deskTaxonomy choices in form definition');
-            const parser = new DOMParser();
-            const serializer = new XMLSerializer();
-
-            const doc = parser.parseFromString(formXML, 'application/xml');
-            const elements = doc.getElementsByTagName('*');
-
-            let hasReplacements = false;
             for (let i = 0; i < elements.length; i++) {
-                if (elements[i].tagName === 'instance' && elements[i].getAttribute('id')?.startsWith('deskTaxonomy')) {
-                    log.info(`Found deskTaxonomy tag ${elements[i].getAttribute('id')}`);
-                    let choiceOptions: Document | null = null;
-                    let taxonomySlug;
+                const text = elements[i].textContent;
+                if (!text?.startsWith('deskUser.administrative_region_')) continue;
 
-                    if (elements[i].getAttribute('id') === 'deskTaxonomy.administrative_region') {
-                        taxonomySlug = 'administrative_region';
-                    } else {
-                        taxonomySlug = elements[i].getAttribute('id')?.slice('deskTaxonomy.'.length);
-                    }
-
-                    if (taxonomySlug) {
-                        choiceOptions = await readTaxonomyChoices(taxonomySlug);
-                    }
-
-                    if (choiceOptions) {
-                        elements[i].replaceChildren(choiceOptions.documentElement);
-                        elements[i].setAttribute('id', taxonomySlug);
-
-                        for (let i = 0; i < elements.length; i++) {
-                            if (
-                                elements[i].tagName === 'itemset' &&
-                                elements[i].getAttribute('nodeset')?.startsWith('instance')
-                            ) {
-                                const nodeset = elements[i].getAttribute('nodeset');
-                                if (nodeset && nodeset.includes(`deskTaxonomy.${taxonomySlug}`)) {
-                                    const newNodeset = nodeset?.replace('deskTaxonomy.', '');
-                                    elements[i].setAttribute('nodeset', newNodeset);
-                                }
-                            }
-                        }
-                        hasReplacements = true;
-                    }
+                const level = text.slice('deskUser.administrative_region_'.length);
+                const value = response?.[level];
+                if (typeof value === 'string') {
+                    elements[i].textContent = value;
                 }
             }
 
-            if (hasReplacements) {
-                setFormXML(serializer.serializeToString(doc));
-                log.info('deskTaxonomy choices replaced successfully');
-            } else {
-                log.info('No deskTaxonomy tags found');
-                setIsDeskTaxonomyInserted(true);
+            return serializer.serializeToString(doc);
+        };
+
+        const readTaxonomyChoices = async (taxonomySlug: string): Promise<string | null> => {
+            log.info(`Reading taxonomy data for ${taxonomySlug}`);
+            try {
+                if (taxonomySlug === 'administrative_region') {
+                    return await ipcRenderer.invoke('read-administrative-region-data');
+                }
+                return await ipcRenderer.invoke('read-taxonomy-data', taxonomySlug);
+            } catch (error) {
+                log.error(`Error reading ${taxonomySlug} taxonomy data`);
+                log.error(error);
+                return null;
             }
         };
 
-        if (formXML) {
-            if (!instance_id && !injectedData) {
-                log.info('This appears to be a fresh form, replacing deskUser and deskTaxonomy tags.');
-                replaceUserValues(formXML);
-                insertTaxonomyChoices(formXML);
-            } else if (editable) {
-                log.info('This appears to be an editable but filled-in form, only replacing deskTaxonomy tags.');
-                setIsDeskUserReplaced(true);
-                insertTaxonomyChoices(formXML);
-            } else {
-                log.info('This appears to be a filled-in form, not replacing any tags.');
-                setIsDeskUserReplaced(true);
-                setIsDeskTaxonomyInserted(true);
+        const prepareDefinition = async () => {
+            if (!formXML) return;
+
+            setHydratedFormXML('');
+            setPrefilledFormXML('');
+            setIsPrefilled(false);
+
+            try {
+                const withUserValues = !instance_id && !injectedData ? await replaceUserValues(formXML) : formXML;
+                const withTaxonomyChoices = await hydrateDeskTaxonomyInstances(withUserValues, readTaxonomyChoices);
+                if (!cancelled) {
+                    setHydratedFormXML(withTaxonomyChoices);
+                    log.info('deskTaxonomy choices hydrated successfully');
+                }
+            } catch (error) {
+                log.error('Error hydrating form definition');
+                log.error(error);
             }
-        }
-    }, [formXML, instance_id, editable, injectedData]);
+        };
+
+        void prepareDefinition();
+        return () => {
+            cancelled = true;
+        };
+    }, [formXML, instance_id, injectedData]);
 
     // if the form has been filled out previously, read the data
     // FIXME and then force it into the form as "default" data
     // because we couldn't get the instanceStr to work in the EnketoForm component
     // but we also use this for injecting data via a workflow
     useEffect(() => {
-        const replacePrefilledValues = (formXML: string, formData: string) => {
-            log.info('Replacing prefilled values in form definition');
-            const parser = new DOMParser();
-            const serializer = new XMLSerializer();
+        let cancelled = false;
 
-            const doc = parser.parseFromString(formXML, 'application/xml');
-            const prefilledDoc = parser.parseFromString(formData, 'application/xml');
-
-            const elements = prefilledDoc.getElementsByTagName('*');
-
-            let hasReplacements = false;
-            for (let i = 0; i < elements.length; i++) {
-                if (elements[i].children.length === 0 && elements[i].textContent) {
-                    // find the corresponding element in the form definition
-                    const formElement = doc.getElementsByTagName(elements[i].tagName)[0];
-                    if (formElement && formElement.children.length === 0) {
-                        formElement.textContent = elements[i].textContent;
-                        hasReplacements = true;
-                    }
-                }
-            }
-
-            if (hasReplacements) {
-                setPrefilledFormXML(serializer.serializeToString(doc));
-                log.info('Prefilled values replaced successfully');
-            } else {
-                log.info('No prefilled values found');
-                setIsPrefilled(true);
-            }
+        const applyPrefill = (data: string) => {
+            if (cancelled) return;
+            setPrefilledFormXML(prefillFormXML(hydratedFormXML, data));
+            setIsPrefilled(true);
+            log.info('Prefilled values replaced successfully');
         };
 
-        if (form_uid && tableName && instance_id) {
+        if (!hydratedFormXML) return;
+
+        if (form_uid && instance_id) {
             log.info(`Reading data for form: ${form_uid} (${tableName}) and instance: ${instance_id}`);
             readFormData(tableName, form_uid, instance_id)
                 .then((response) => {
-                    const formData = response[0]['xml'] as string;
-                    replacePrefilledValues(formXML, formData);
+                    const formData = response[0]?.xml as string | undefined;
+                    if (formData) {
+                        applyPrefill(formData);
+                    } else {
+                        log.error('No saved form data found for instance');
+                        if (!cancelled) {
+                            setPrefilledFormXML(hydratedFormXML);
+                            setIsPrefilled(true);
+                        }
+                    }
                 })
                 .catch((error) => {
                     log.error('Error reading form data');
                     log.error(error);
+                    if (!cancelled) {
+                        setPrefilledFormXML(hydratedFormXML);
+                        setIsPrefilled(true);
+                    }
                 });
         } else if (injectedData) {
             log.info('Prefilling form with injected data (probably a workflow)');
-            replacePrefilledValues(formXML, injectedData);
+            applyPrefill(injectedData);
         } else {
-            setPrefilledFormXML(formXML);
+            setPrefilledFormXML(hydratedFormXML);
             setIsPrefilled(true);
         }
-    }, [form_uid, formXML, tableName, instance_id, injectedData]);
+        return () => {
+            cancelled = true;
+        };
+    }, [form_uid, hydratedFormXML, tableName, instance_id, injectedData]);
 
     return (
         <>
-            {form_uid && prefilledFormXML && isDeskUserReplaced && isDeskTaxonomyInserted && isPrefilled ? (
+            {form_uid && prefilledFormXML && isPrefilled ? (
                 <EnketoForm formUID={form_uid} formODKXML={prefilledFormXML} instanceID={instance_id} editable={editable} />
             ) : (
                 <LoadingSpinner loadingText="Form is Loading" />
