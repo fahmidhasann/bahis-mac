@@ -82,23 +82,27 @@ check(
 check("dist/cli.js exists", os.path.isfile(os.path.join(MCP_HOME, "dist", "cli.js")))
 
 
-# ── Agent registrations ────────────────────────────────────────────────────
-# The whole point: every agent must reach the MCP *through* the launcher, so the
-# settings exist once. An agent carrying its own env is exactly the drift this
-# scheme removes.
-def entry_claude():
-    with open(CLAUDE_MCP) as fh:
-        return json.load(fh)["mcpServers"][SERVER]
+# ── MCP is retired ─────────────────────────────────────────────────────────
+# Agents now reach BAHIS through cli.sh, not the MCP server. The MCP's tool
+# schemas cost ~3,600 tokens of context in every session, used or not, which is
+# the whole reason it was switched off. These checks assert it stays off, so a
+# stray re-registration cannot silently bring that cost back.
+def _read(path, parse, mode="r"):
+    try:
+        with open(path, mode) as fh:
+            return parse(fh)
+    except FileNotFoundError:
+        return None
+    except (ValueError, yaml.YAMLError, tomllib.TOMLDecodeError):
+        return "unreadable"
 
 
-def entry_hermes():
-    with open(HERMES_CFG) as fh:
-        return yaml.safe_load(fh)["mcp_servers"][SERVER]
-
-
-def entry_codex():
-    with open(CODEX_CFG, "rb") as fh:
-        return tomllib.load(fh)["mcp_servers"][SERVER]
+def mcp_entry(path, parse, key, mode="r"):
+    """The MCP entry for this server, or None if the agent no longer registers it."""
+    data = _read(path, parse, mode)
+    if data in (None, "unreadable"):
+        return data
+    return (data or {}).get(key, {}).get(SERVER)
 
 
 def codex_skill_entries():
@@ -107,24 +111,22 @@ def codex_skill_entries():
         return tomllib.load(fh).get("skills", {}).get("config", [])
 
 
-section("Agent registrations")
-for label, loader in (("Claude Code", entry_claude), ("Hermes", entry_hermes), ("Codex", entry_codex)):
-    try:
-        entry = loader()
-    except FileNotFoundError:
-        check(f"{label} registered", False, "config file not found")
-        continue
-    except (KeyError, ValueError, yaml.YAMLError, tomllib.TOMLDecodeError) as exc:
-        check(f"{label} registered", False, f"could not read config: {exc}")
-        continue
+section("MCP retired (agents use the CLI)")
+claude = mcp_entry(CLAUDE_MCP, json.load, "mcpServers")
+check("Claude Code: MCP not registered", claude is None,
+      "" if claude is None else "still in .mcp.json — costs ~3.6k tokens per session")
 
-    ok = check(f"{label} → launcher", entry.get("command") == LAUNCHER, entry.get("command", "(no command)"))
-    if ok and entry.get("env"):
-        # Not fatal: an explicit override is legal via ${VAR:-default}. But it is
-        # the one way values can diverge again, so surface it loudly.
-        notes.append(f"{label} sets its own env ({', '.join(entry['env'])}) — overrides the launcher default")
-    if label == "Hermes" and entry.get("enabled") is False:
-        check("Hermes server enabled", False, "enabled: false")
+hermes = mcp_entry(HERMES_CFG, yaml.safe_load, "mcp_servers")
+hermes_off = hermes is None or (isinstance(hermes, dict) and hermes.get("enabled") is False)
+check("Hermes: MCP disabled", hermes_off,
+      "" if hermes_off else "enabled: true — set it to false")
+
+codex = mcp_entry(CODEX_CFG, tomllib.load, "mcp_servers", "rb")
+check("Codex: MCP not registered", codex is None,
+      "" if codex is None else "still in ~/.codex/config.toml")
+
+if hermes is not None and hermes_off:
+    notes.append("Hermes keeps the disabled entry, so re-enabling is a one-word change")
 
 # ── Skill ──────────────────────────────────────────────────────────────────
 # All three agents run the same bahis-register-patients file: Claude Code owns it,
@@ -161,67 +163,53 @@ else:
         check("Codex skill entry is enabled", enabled is not False, "" if enabled is not False else "enabled = false")
 
 # ── Live probe ─────────────────────────────────────────────────────────────
-# Config agreement is not proof the server runs. Start it through the launcher
-# exactly as an agent would and confirm the safety gate is on.
-section("Live probe (through the launcher)")
-requests = [
-    {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-     "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                "clientInfo": {"name": "bahis-check", "version": "1"}}},
-    {"jsonrpc": "2.0", "method": "notifications/initialized"},
-    {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-     "params": {"name": "bahis_status", "arguments": {}}},
-]
+# Config agreement is not proof anything runs. Invoke the CLI through its
+# launcher exactly as a skill would, and confirm the safety gates are on.
+section("Live probe (through cli.sh)")
 
 
 def probe():
-    """Start the server through the launcher exactly as an agent would.
+    """Run `cli.sh status` the way the skill does.
 
-    Returns (status_dict_or_None, error_string). bahis_status reaches the network,
-    so a single transient blip must not be reported as configuration drift —
-    the caller retries once before failing.
+    Returns (status_dict_or_None, error_string). status reaches the network, so a
+    single transient blip must not be reported as configuration drift - the caller
+    retries once before failing.
     """
     try:
         proc = subprocess.run(
-            [LAUNCHER],
-            input="\n".join(json.dumps(r) for r in requests) + "\n",
+            [CLI_LAUNCHER, "status"],
             capture_output=True, text=True, timeout=60,
         )
     except subprocess.TimeoutExpired:
         return None, "timed out after 60s"
+    except OSError as exc:
+        return None, str(exc)
 
-    for line in proc.stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            msg = json.loads(line)
-        except json.JSONDecodeError:
-            return None, f"stray output corrupts MCP framing: {line[:60]}"
-        if msg.get("id") == 2:
-            result = msg.get("result", {})
-            # The real payload is in structuredContent; content[0].text is only a
-            # human-readable summary line.
-            status = result.get("structuredContent")
-            if status is None:
-                return None, f"unexpected result shape: {json.dumps(result)[:80]}"
-            return status, ""
-    return None, (proc.stderr.strip().splitlines() or ["no response"])[-1][:120]
+    if not proc.stdout.strip():
+        return None, (proc.stderr.strip().splitlines() or ["no output"])[-1][:120]
+    try:
+        # The CLI's contract: stdout is JSON and nothing else. If anything else
+        # leaked onto stdout, a caller parsing it would break - so fail here.
+        return json.loads(proc.stdout), ""
+    except json.JSONDecodeError:
+        return None, f"stdout is not pure JSON: {proc.stdout.strip()[:60]}"
 
 
 status, error = probe()
 if status is None:
-    notes.append(f"first probe attempt failed ({error}) — retrying once")
+    notes.append(f"first probe attempt failed ({error}) - retrying once")
     status, error = probe()
 
-if check("server responds to bahis_status", status is not None, error):
+if check("cli.sh status responds with JSON", status is not None, error):
     check("database found", status.get("databaseFound") is True)
     check("authenticated", status.get("authenticated") is True)
     check("server reachable", status.get("serverReachable") is True)
+    # formCompatible now reflects the live server form, which is what gates a write.
+    check("live form compatible", status.get("formCompatible") is True)
     # The gate whose absence caused the original drift incident.
     check("semanticChoiceValidation enabled", status.get("semanticChoiceValidation") is True)
     for warning in status.get("warnings") or []:
-        notes.append(f"server warning: {warning}")
+        notes.append(f"status warning: {warning}")
 
 # ── Summary ────────────────────────────────────────────────────────────────
 print()
@@ -230,5 +218,5 @@ for note in notes:
 if failures:
     print(f"\n{len(failures)} check(s) FAILED: {', '.join(failures)}")
     sys.exit(1)
-print("\nAll checks passed — every agent runs the same MCP with the same settings.")
+print("\nAll checks passed — every agent runs the same CLI with the same settings.")
 PY
