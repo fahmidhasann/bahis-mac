@@ -1,0 +1,36 @@
+{
+  "name": "bahis-patient-registry-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "doctor": "node dist/doctor.js",
+    "cli": "node dist/cli.js",
+    "audit:dropdowns": "tsx src/dropdown-audit.ts --output ../../artifacts/bahis-mcp-dropdown-audit.csv",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "check": "tsc -p tsconfig.json --noEmit && npm test",
+    "verify:agents": "./scripts/bahis-check.sh",
+    "sync": "npm run check && npm run build && npm run verify:agents"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@xmldom/xmldom": "0.9.10",
+    "better-sqlite3": "13.0.3",
+    "csv-parse": "6.1.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "22.18.6",
+    "tsx": "4.20.6",
+    "typescript": "5.9.2"
+  },
+  "bin": {
+    "bahis": "dist/cli.js"
+  }
+}
