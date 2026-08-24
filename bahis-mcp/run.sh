@@ -27,6 +27,14 @@ BAHIS_MCP_HOME=$(CDPATH= cd -- "$(dirname -- "$BAHIS_MCP_SELF")" && pwd -P)
 
 # ${VAR:-default} lets a single agent override one setting via its own env block
 # without the others having to change.
+# Some agents spawn subprocesses with a sanitised environment, where HOME is unset.
+# `set -u` would then abort on the defaults below, so recover it from the passwd
+# entry - ~username expansion does not consult $HOME.
+if [ -z "${HOME:-}" ]; then
+  HOME=$(eval echo "~$(id -un)")
+  export HOME
+fi
+
 BAHIS_DB_PATH="${BAHIS_DB_PATH:-$HOME/Library/Application Support/bahis/bahis3.db}"
 BAHIS_MCP_ALLOW_PRODUCTION_WRITES="${BAHIS_MCP_ALLOW_PRODUCTION_WRITES:-1}"
 export BAHIS_DB_PATH BAHIS_MCP_ALLOW_PRODUCTION_WRITES

@@ -140,3 +140,34 @@ that logic lives in the desktop app's `electron/sync.ts`. Consequently `bahis lo
 refresh an expired token, but it cannot bootstrap a fresh machine: the desktop app must
 have signed in and synced at least once to create the database and populate the reference
 data that patient submission depends on.
+
+### Using this from another agent
+
+Two names are all an agent needs:
+
+| | Name | Where |
+|---|---|---|
+| CLI | `bahis` | `~/.local/bin/bahis` -> `source/bahis-mcp/cli.sh` |
+| Skill | `bahis-register-patients` | `.claude/skills/bahis-register-patients/SKILL.md` |
+
+The CLI is a plain command, so any agent that can run a shell can use it - no MCP
+server, no plugin, no protocol. Point the agent at the absolute launcher path if
+`bahis` is not on its `PATH`:
+
+```
+/Users/fahmidhasantaohid/Documents/BAHIS-Mac-Development/source/bahis-mcp/cli.sh status
+```
+
+The launcher tolerates a sanitised environment: it recovers `HOME` from the passwd
+entry and resolves its own directory through symlinks, so it works with no `PATH`,
+no `HOME`, and from any working directory. That is deliberate - agents commonly
+spawn subprocesses with a stripped environment.
+
+For an agent with a skills system, install `bahis-register-patients` by pointing at
+the file above (Hermes symlinks it, Codex references it by absolute path). For an
+agent without one, paste the same SKILL.md in as instructions - it is plain Markdown
+and names only shell commands, so nothing in it is agent-specific.
+
+Whatever the agent, the division of labour is the same: the agent reads `context`
+and `summary`, decides what records to write, and the CLI validates and submits
+them. The CLI never invents records.
