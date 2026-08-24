@@ -124,14 +124,38 @@ staging, journalling or uploading. Use it before spending a real write against p
 
 ### Installing
 
-`npm run build`, then symlink the launcher onto `PATH`:
+**macOS / Linux** - `npm run build`, then symlink the launcher onto `PATH`:
 
 ```sh
 ln -sfn "$PWD/cli.sh" ~/.local/bin/bahis
 ```
 
-`cli.sh` mirrors `run.sh`'s environment defaults, so the CLI and the MCP always talk to the
-same database with the same settings.
+**Windows** - `npm ci && npm run build`, then put this directory on `PATH` so `bahis.cmd`
+resolves (one line, run once in PowerShell):
+
+```powershell
+[Environment]::SetEnvironmentVariable('Path', "$env:Path;$PWD", 'User')
+```
+
+Either way the command is then just `bahis`, which is what the skill and every agent calls.
+
+`cli.sh` and `bahis.cmd` are twins, and `cli.sh` mirrors `run.sh`: the environment defaults
+live in one place per platform and cannot drift. Neither launcher sets `BAHIS_DB_PATH` -
+`config.ts` resolves that per platform, and a default in a launcher would override it with
+the wrong path on the other two.
+
+### Windows notes
+
+- **The desktop app must come first.** The CLI cannot create the database or the reference
+  tables; only the BAHIS Electron app's own sync does that. Install the official
+  `BAHIS_3.0.4.exe`, sign in, and let it sync once. The CLI then reads
+  `%APPDATA%\bahis\bahis3.db`.
+- **No build tools needed.** `better-sqlite3` ships prebuilt binaries for `win32-x64` and
+  `win32-arm64`, so there is no node-gyp or Visual Studio step.
+- **Node 22.x** is required (`engines` in `package.json`).
+- `scripts/bahis-check.sh` (`npm run verify:agents`, `npm run sync`) and
+  `npm run audit:dropdowns` are macOS/Linux developer tooling - POSIX shell, and the audit
+  writes outside this directory. Neither is needed to register patients.
 
 ### What it does not do
 

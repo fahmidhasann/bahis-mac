@@ -25,22 +25,30 @@ done
 BAHIS_MCP_HOME=$(CDPATH= cd -- "$(dirname -- "$BAHIS_MCP_SELF")" && pwd -P)
 
 # Some agents spawn subprocesses with a sanitised environment, where HOME is unset.
-# `set -u` would then abort on the defaults below, so recover it from the passwd
+# `set -u` would then abort on the lookups below, so recover it from the passwd
 # entry - ~username expansion does not consult $HOME.
 if [ -z "${HOME:-}" ]; then
   HOME=$(eval echo "~$(id -un)")
   export HOME
 fi
 
-BAHIS_DB_PATH="${BAHIS_DB_PATH:-$HOME/Library/Application Support/bahis/bahis3.db}"
+# BAHIS_DB_PATH is deliberately NOT defaulted here. config.ts resolves the right location
+# per platform (macOS ~/Library/Application Support, Windows %APPDATA%, else XDG), and a
+# default in this script would silently override that with a macOS path. Set the variable
+# only to point at a non-standard database.
 BAHIS_MCP_ALLOW_PRODUCTION_WRITES="${BAHIS_MCP_ALLOW_PRODUCTION_WRITES:-1}"
-export BAHIS_DB_PATH BAHIS_MCP_ALLOW_PRODUCTION_WRITES
+export BAHIS_MCP_ALLOW_PRODUCTION_WRITES
 
+# Prefer the pinned node, but fall back to whatever is on PATH so a machine that installed
+# node normally still works.
 BAHIS_MCP_NODE="${BAHIS_MCP_NODE:-$HOME/.local/bin/node}"
+if [ ! -x "$BAHIS_MCP_NODE" ]; then
+  BAHIS_MCP_NODE=$(command -v node || true)
+fi
 BAHIS_CLI_ENTRY="$BAHIS_MCP_HOME/dist/cli.js"
 
-if [ ! -x "$BAHIS_MCP_NODE" ]; then
-  echo "bahis: node not found or not executable: $BAHIS_MCP_NODE" >&2
+if [ -z "$BAHIS_MCP_NODE" ] || [ ! -x "$BAHIS_MCP_NODE" ]; then
+  echo "bahis: no usable node found - install Node 22.x or set BAHIS_MCP_NODE" >&2
   exit 1
 fi
 

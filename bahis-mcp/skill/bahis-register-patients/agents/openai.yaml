@@ -1,0 +1,13 @@
+interface:
+  display_name: "BAHIS Register Patients"
+  short_description: "Register verified fictional BAHIS patients"
+  default_prompt: "Use $bahis-register-patients to register 20 patients."
+
+dependencies:
+  tools:
+    - type: "shell"
+      value: "/Users/fahmidhasantaohid/Documents/BAHIS-Mac-Development/source/bahis-mcp/cli.sh"
+      description: "BAHIS Patient Registry CLI"
+
+policy:
+  allow_implicit_invocation: false
