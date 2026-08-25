@@ -1,232 +1,255 @@
 # BAHIS-desk
 
-This repository is Fahmid Hasan Taohid's private Apple Silicon development line of the GPL-3.0 BAHIS desktop
-application. The original project history and authorship are preserved. The personal repository is `origin`, while
-`upstream` points to `chameleonhub/chameleon-workstation` and has pushing disabled.
+This repository is a private development line of the GPL-3.0 BAHIS desktop application
+(Bangladesh Animal Health Intelligence System). The original project history and authorship are
+preserved. The personal repository is `origin`; `upstream` points to
+`chameleonhub/chameleon-workstation` and has pushing disabled.
 
-Development is performed by one developer on macOS with ChatGPT Codex. Repository instructions for Codex are in
-[`AGENTS.md`](./AGENTS.md). GitHub is used for private source control and backup, not as a team-development workflow.
+It contains **two** deliverables:
 
-## Native Apple Silicon build
+| | What it is | Where |
+|---|---|---|
+| **BAHIS desktop application** | The Electron app people use to enter and sync records. It owns the local database. | this directory |
+| **`bahis` CLI** | A command line for validated Patient Registry entry, so an AI agent can register records without touching the app's UI. | [`bahis-cli/`](./bahis-cli) |
 
-The macOS build runs directly on Apple Silicon and does not use Wine, Rosetta, or a virtual machine.
+If you are an agent that was handed this repository to set up the CLI, read
+**[Setting up the `bahis` CLI](#setting-up-the-bahis-cli)** below and follow it in order. It
+works the same on macOS, Windows and Linux.
 
-Install Node.js 22.23.2 (for example with `fnm`). Then run these commands from the repository root so
-the version manager can read `.nvmrc`:
+---
+
+## Setting up the `bahis` CLI
+
+Four phases. **Each phase ends with a gate — do not start the next phase until the gate
+passes.** Everything here is the same on all three operating systems except where a table
+splits by platform.
+
+### Phase 0 — Get the code
+
+This repository is **private**. Cloning it needs credentials.
 
 ```bash
-fnm use --install-if-missing
-npm ci
-npm run check
-npm run build:mac
+gh auth login          # or: git clone https://<token>@github.com/<owner>/bahis-mac.git
+git clone https://github.com/<owner>/bahis-mac.git
+cd bahis-mac
 ```
 
-The generated application and DMG are written to `release/3.0.4/`. The local build is ad-hoc signed for
-personal use and is not notarized for public distribution. Application data is stored in
-`~/Library/Application Support/bahis/`. Production uses `bahis3.db`, development uses
-`bahis3_development.db`, and both modes write diagnostic information to `electron-debug.log`.
+If you do not have credentials, **stop and ask for them.** Do not look for a public mirror.
 
-Automatic application updates are disabled on macOS because the official update feed currently publishes
-Windows packages only. Use **File > View official releases** and rebuild from a newer official source tag when
-one becomes available.
-
-To migrate an existing database, close both BAHIS installations, back up `bahis3.db`, and then copy it to
-`~/Library/Application Support/bahis/bahis3.db` before starting the Mac application.
-
-## Local Development - Setup
-
-### macOS
-
-Run all development commands from this repository directory:
+You also need **Node.js 22.x** — the exact version is pinned in [`.nvmrc`](./.nvmrc). Any
+version manager works:
 
 ```bash
-fnm use --install-if-missing
+fnm use --install-if-missing     # or: nvm install && nvm use
+node --version                   # must print v22.x
+```
+
+> **Gate:** `node --version` prints `v22.` and you are inside the repository directory.
+
+### Phase 1 — Install the desktop application
+
+The CLI cannot work until the desktop application has created the database and synced the
+reference data. **This step is not optional and no CLI command can substitute for it.**
+
+| Platform | How |
+|---|---|
+| **Windows** | Download and run the published `BAHIS_3.0.4.exe` installer from the upstream releases page. A signed, tested installer is more reliable than building Electron with native modules on a fresh machine. |
+| **macOS** | Build it here: `npm ci && npm run build:mac`. The app and DMG are written to `release/3.0.4/`. The build is ad-hoc signed for personal use and is not notarized. |
+| **Linux** | Build it here: `npm ci && npm run build:linux`. An AppImage is written to `release/3.0.4/` — it runs on any distribution with no package manager involved. |
+
+Then **open the application, sign in, and let it sync at least once.** It writes the database
+to:
+
+| Platform | Database |
+|---|---|
+| macOS | `~/Library/Application Support/bahis/bahis3.db` |
+| Windows | `%APPDATA%\bahis\bahis3.db` |
+| Linux | `~/.config/bahis/bahis3.db` |
+
+> **Gate:** that file exists and is more than a few kilobytes. If it does not exist, the sync
+> did not finish — go back and sync again rather than continuing.
+
+### Phase 2 — Install the CLI
+
+Three commands, identical on every platform:
+
+```bash
+cd bahis-cli
+npm ci
+npm link
+```
+
+`npm link` compiles the TypeScript and puts a `bahis` command on `PATH`. npm creates the right
+shim for the platform, including the `.cmd` wrapper on Windows, so **there is no `PATH` editing
+to do by hand.** On Windows, open a new terminal afterwards.
+
+No build tools are required — `better-sqlite3` ships prebuilt binaries for all three platforms,
+so there is no node-gyp, Visual Studio or Xcode step.
+
+Then verify:
+
+```bash
+npm run doctor
+```
+
+> **Gate:** every line reads `OK`. This is the real test — it checks the Node version, the
+> build, the `PATH` install, the database, the skill, and makes a live call to the server.
+> **Do not continue past a `FAIL`.** Each failure line names its own fix, and
+> [`bahis-cli/README.md`](./bahis-cli/README.md#troubleshooting) has a table of all of them.
+> If `authenticated` is false, run `bahis login -u <username> -p <password>` and re-run
+> `doctor`.
+
+### Phase 3 — Install the agent skill
+
+```bash
+npm run install-skill
+```
+
+This links `bahis-register-patients` into whichever agent skill directories exist on this
+machine (`~/.claude/skills`, `~/.hermes/skills/productivity`, `~/.agents/skills`) and skips the
+rest. On Windows it uses a directory junction, so no administrator rights are needed. If Codex
+is installed, the script prints a `[[skills.config]]` block for you to paste into
+`~/.codex/config.toml`.
+
+For an agent with no skills system, paste
+`bahis-cli/skill/bahis-register-patients/SKILL.md` in as instructions — it is plain Markdown
+naming only shell commands.
+
+> **Gate:** `npm run doctor` still passes, and the skill line lists at least one agent.
+
+### Done
+
+The agent now has one command, `bahis`, and one skill. Full command reference, exit codes and
+safety model: [`bahis-cli/README.md`](./bahis-cli/README.md).
+
+---
+
+## Desktop application development
+
+Run all commands from this repository root so the version manager can read `.nvmrc`.
+
+```bash
+fnm use --install-if-missing     # or: nvm install && nvm use
 npm ci
 npm run dev
 ```
 
-Development mode expects local BAHIS and Kobo services by default. Override them in an ignored `.env.local` file when
-using different endpoints. Never commit that file or any credentials.
+Development mode expects local BAHIS and Kobo services by default. Override them in an ignored
+`.env.local` file when using different endpoints. Never commit that file or any credentials.
 
-Before committing a change, run:
+Before committing a change:
 
 ```bash
 npm run check
 npm audit
 ```
 
-For changes that affect Electron, native modules, or packaging, also run `npm run build:mac`.
+For changes affecting Electron, native modules or packaging, also run the build for your
+platform.
+
+### Building for distribution
+
+```bash
+npm run build:mac      # DMG + .app, arm64
+npm run build:win      # NSIS installer, x64
+npm run build:linux    # AppImage, x64 + arm64
+```
+
+Output goes to `release/3.0.4/`. Application data lives in the platform paths listed in Phase 1;
+production uses `bahis3.db`, development uses `bahis3_development.db`, and both write
+diagnostics to `electron-debug.log`.
+
+Automatic updates are disabled on macOS because the official update feed currently publishes
+Windows packages only. Use **File > View official releases** and rebuild from a newer official
+source tag when one becomes available.
+
+To migrate an existing database, close both BAHIS installations, back up `bahis3.db`, then copy
+it to the platform path above before starting the application.
+
+### Windows build notes
+
+Install Node 22.x from the Node.js website. When the installer offers to install additional
+tools with Chocolatey, accept — that covers Visual Studio, Python and the other native-module
+prerequisites. (This applies to *building the desktop app*. The `bahis` CLI needs none of it.)
 
 ### Known dependency follow-up
 
-The readiness baseline has no critical or high npm audit findings. Two moderate React Router findings remain and require
-a planned React Router 7 migration. Do not run `npm audit fix --force`; it may introduce breaking framework changes.
+The readiness baseline has no critical or high npm audit findings. Two moderate React Router
+findings remain and require a planned React Router 7 migration. **Do not run
+`npm audit fix --force`** — it may introduce breaking framework changes.
 
-Enketo currently declares support through Node 20 and prefers Yarn, while this proven Apple Silicon build uses the
-project-pinned Node 22.23.2 and npm. Treat the resulting engine messages as known warnings and re-run the form workflow
-smoke tests whenever Enketo, Node.js, or the XML dependency overrides change.
+Enketo declares support through Node 20 and prefers Yarn, while this build uses the
+project-pinned Node 22 and npm. Treat the resulting engine messages as known warnings, and
+re-run the form workflow smoke tests whenever Enketo, Node.js or the XML dependency overrides
+change.
 
-### Linux
-
-Use Node 22.23.2, as pinned in `.nvmrc`. On Linux a convenient way is to use Node Version
-Manager (https://github.com/nvm-sh/nvm)
-
-```bash
-nvm install 22.23.2
-nvm use 22.23.2
-```
-
-Next, in your shell, change directory to the bahis-desk project and run:
-
-```bash
-npm ci
-npm run dev
-```
-
-### Windows
-
-On Windows install Node 22.23.2 directly from the Node.js website.
-
-Please tick to install all additional tools with "chocolatey" that should cover all of the other requirements (visual
-studio, python etc.)
-
-## Helpful tricks
-
-### How to format code locally
-
-Just run `npm run format`
-
-### How to lint your code to find potential issues
-
-Just run `npm run lint-electron` for the electron code and `npm run lint-react` for the react code.
-
-### core dumped and loads of go errors
-
-Scroll up - do you see "fatal error: all goroutines are asleep - deadlock!". If so, I think you are using the wrong
-version of node. Try running:
-
-```bash
-node --version
-```
-
-And then select the correct version with `nvm` or whatever you're using.
-
-### better-sqlite error
-
-If you get an error like this (note: version numbers may vary):
-
-```bash
-Uncaught Error: The module './node_modules/better-sqlite3/build/Release/better_sqlite3.node'
-was compiled against a different Node.js version using
-NODE_MODULE_VERSION 64. This version of Node.js requires
-NODE_MODULE_VERSION 69. Please try re-compiling or re-installing
-```
-
-First, check you are using the correct version of node:
-
-```bash
-node --version
-```
-
-Then, if you are, run:
-
-```bash
-npm run fix-better-sqlite-build-error
-```
-
-### clearing the local datatabase
-
-In order to reset the database before the next build you need to remove the bahis files, e.g. on linux:
-
-```bash
-rm -rf ~/.config/bahis
-```
-
-The exact location of your database will be in the electron-debug.log file and / or printed to your console.
-
-### too many watchers
-
-There is some leak in UI code that might give an error saying that there are too many watchers. Try this
-
-```bash
-echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
-```
-
-(https://stackoverflow.com/questions/55763428/react-native-error-enospc-system-limit-for-number-of-file-watchers-reached)
-
-## Building the app for distribution
-
-### For Windows
-
-```bash
-npm run build
-```
+---
 
 ## Configuration
 
-The application supports three `.env` files:
+Three `.env` files are supported: `.env` (local development), `.env.staging`, `.env.production`.
+A `.env.local` file, if present, is used instead of `.env` for local development.
 
-- `.env` - for local development
-- `.env.staging` - for staging builds
-- `.env.production` - for production builds
-
-All variables in `.env` files should follow the naming format `VITE_[SCOPE]_[REALLY_USEFUL_NAME]`, where
-`SCOPE` is one of [`BAHIS`, `ELECTRON`, `REACT`] depending on whether it defines how the system interacts with the BAHIS
-server, the electron main process, or the react renderer process.
-Once variables are read into the code they lose the `VITE_` prefix, e.g. `VITE_BAHIS2_SERVER_URL` becomes
-`BAHIS2_SERVER_URL`.
-
-### Locally overriding environment variables
-
-If you have a `.env.local` file, this will be used instead of `.env` for local development, e.g. your `.env.local` if
-you are testing local server changes might look like this:
+Variables follow `VITE_[SCOPE]_[NAME]`, where `SCOPE` is one of `BAHIS`, `ELECTRON` or `REACT`
+depending on whether the variable defines how the system talks to the BAHIS server, the Electron
+main process, or the React renderer. Once read into the code they lose the `VITE_` prefix:
+`VITE_BAHIS2_SERVER_URL` becomes `BAHIS2_SERVER_URL`.
 
 ```bash
+# .env.local — for testing against a local server
 VITE_BAHIS2_SERVER_URL=http://localhost
 ```
 
-### Adding new environment variables
+### Adding a new environment variable
 
-Note that adding environment variables is a multistep process and depends on what you're trying to acheive.
-
-#### Scenario 1 - environment variables that depend only on the build mode
-
-If you're trying to set an environment variable that depends only on the build mode (`development` / `staging` /
-`production`), e.g. `BAHIS2_SERVER_URL` might be `http://localhost` in `development` and `http://www.bahis2-dev.net` in
-`staging` and if you are accessing this variable in the electron main process (probably the most common scenario), you
-can hard code this into the switch statement near the top of [`/electron/main.ts`](./electron/main.ts). For example:
+**If it depends only on the build mode** (`development` / `staging` / `production`) and is read
+in the Electron main process, hard-code it into the switch statement near the top of
+[`electron/main.ts`](./electron/main.ts):
 
 ```typescript
-// default environment variables, i.e. for local development
 let BAHIS2_SERVER_URL = 'http://www.bahis2-dev.net';
 
-// set environment variables based on mode
 switch (import.meta.env.MODE) {
-    case 'development':
-        break;
     case 'staging':
         BAHIS2_SERVER_URL = 'http://www.bahis2-dev.net';
         break;
     default:
         break;
 }
-```
 
-If you also want to enable the ability to override this variable from a `.env` file or local shell environment, you can
-add the following code below the switch statement:
-
-```typescript
-// overwrite anything defined in a .env file
+// allow a .env file or the shell to override
 if (import.meta.env.VITE_BAHIS2_SERVER_URL) {
     BAHIS2_SERVER_URL = import.meta.env.VITE_BAHIS2_SERVER_URL;
-    log.warn(`Overwriting BAHIS2_SERVER_URL base on environment variables or .env[.local] file.`);
+    log.warn('Overwriting BAHIS2_SERVER_URL based on environment variables or .env[.local] file.');
 }
 ```
 
-#### Scenario 2 - environment variables that vary based on the server or user, e.g. secret keys or URLs that change between deployments
+**If it varies by server or user:** put not-so-secret values (URLs) in `.env`, and secrets (keys,
+passwords) in `.env.local` — then document the secret's existence here, never its value.
 
-Store these inside an appropriate `.env` file:
+---
 
-- if it's not-so-secret, i.e. a URL, add it to `.env` (and if it changes then `.env.staging` and / or
-  `.env.production`).
-- if it's a secret, i.e. a key or password, add it to `.env.local` and document it in the `README.md` file.
+## Troubleshooting
+
+**Format and lint.** `npm run format`; `npm run lint-electron` for Electron code and
+`npm run lint-react` for React code.
+
+**"core dumped" and Go errors.** Scroll up — if you see
+`fatal error: all goroutines are asleep - deadlock!`, you are on the wrong Node version. Check
+`node --version` against `.nvmrc`.
+
+**better-sqlite3 `NODE_MODULE_VERSION` mismatch.** Confirm your Node version first, then run
+`npm run fix-better-sqlite-build-error`.
+
+**Too many watchers (Linux).** A leak in the UI code can exhaust inotify watches:
+
+```bash
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
+```
+
+**Resetting the local database.** Delete the platform data directory — for example
+`rm -rf ~/.config/bahis` on Linux. The exact location is printed to the console and recorded in
+`electron-debug.log`.
+
+**CLI problems** have their own table in
+[`bahis-cli/README.md`](./bahis-cli/README.md#troubleshooting).

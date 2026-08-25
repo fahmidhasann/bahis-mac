@@ -34,7 +34,7 @@ export class KoboClient {
     ) {}
 
     private headers(accept = 'application/json'): HeadersInit {
-        return { Authorization: `TOKEN ${this.token}`, Accept: accept, 'User-Agent': 'BAHIS-Patient-Registry-MCP/0.1.0' };
+        return { Authorization: `TOKEN ${this.token}`, Accept: accept, 'User-Agent': 'BAHIS-Patient-Registry-CLI/1.0.0' };
     }
 
     async health(): Promise<boolean> {

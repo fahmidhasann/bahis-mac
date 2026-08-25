@@ -33,7 +33,7 @@ function createFixture(): { directory: string; dbPath: string; journalPath: stri
     return { directory, dbPath, journalPath };
 }
 
-test('audit reports MCP records that saved a Union label and writes no patient data', () => {
+test('audit reports journal records that saved a Union label and writes no patient data', () => {
     const { directory, dbPath, journalPath } = createFixture();
     try {
         const audit = collectInvalidUnionAudit(dbPath, journalPath);

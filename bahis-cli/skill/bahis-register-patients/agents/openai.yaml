@@ -6,7 +6,9 @@ interface:
 dependencies:
   tools:
     - type: "shell"
-      value: "/Users/fahmidhasantaohid/Documents/BAHIS-Mac-Development/source/bahis-mcp/cli.sh"
+      # The command, not a path. npm installs `bahis` onto PATH on every platform, so this
+      # entry stays correct when the repo moves or is cloned somewhere else.
+      value: "bahis"
       description: "BAHIS Patient Registry CLI"
 
 policy:

@@ -135,7 +135,7 @@ export function assertCompatibleForm(formXml: string): string {
     const hash = requiredContractHash(formXml);
     if (hash !== SUPPORTED_REQUIRED_CONTRACT_SHA256) {
         throw new Error(
-            `Patient Registry required fields or constraints changed (contract ${hash}). Update the MCP before submitting.`,
+            `Patient Registry required fields or constraints changed (contract ${hash}). Update the CLI before submitting.`,
         );
     }
     return hash;

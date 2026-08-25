@@ -1,4 +1,0 @@
-# cmd.exe mishandles bare LF, and /bin/sh mishandles CR. Pin both so a clone on either
-# platform gets working launchers whatever the user's core.autocrlf is set to.
-*.cmd text eol=crlf
-*.sh  text eol=lf

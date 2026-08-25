@@ -62,6 +62,20 @@
     icon: './public/icon.png',
     artifactName: '${productName}_${version}.${ext}'
   },
+  linux: {
+    target: [
+      {
+        target: 'AppImage',
+        arch: [
+          'x64',
+          'arm64'
+        ]
+      }
+    ],
+    icon: './public/icon.png',
+    category: 'Science',
+    artifactName: '${productName}_${version}_linux_${arch}.${ext}'
+  },
   nsis: {
     oneClick: false,
     perMachine: true,

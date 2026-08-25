@@ -1,7 +1,7 @@
 import type { SpeciesType } from './types.js';
 
 export const SERVER_NAME = 'bahis-patient-registry';
-export const SERVER_VERSION = '0.1.0';
+export const CLI_VERSION = '1.0.0';
 
 export const PATIENT_REGISTRY_FORM_UID = 'ajAsiLXLghXg2c2BXFMQbV';
 export const SUPPORTED_REQUIRED_CONTRACT_SHA256 = 'd840ad9d7310b8c7cb17f54e3d62c3156a3fe7f2430afb5103f12a940412c6d8';

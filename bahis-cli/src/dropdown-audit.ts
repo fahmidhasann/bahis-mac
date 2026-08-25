@@ -78,7 +78,7 @@ function csv(rows: DropdownAuditRow[]): string {
 }
 
 /**
- * Opens both BAHIS databases in SQLite read-only mode and reports MCP journal
+ * Opens both BAHIS databases in SQLite read-only mode and reports journal
  * records whose stored union value is not a numeric Union ID for the current
  * signed-in upazila.  No database tables or submissions are changed.
  */

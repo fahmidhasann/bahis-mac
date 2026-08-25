@@ -16,6 +16,7 @@
     "build:app": "tsc && vite build --mode production",
     "build:mac": "npm run build:app && electron-builder --mac --arm64",
     "build:win": "npm run build:app && electron-builder --win --x64",
+    "build:linux": "npm run build:app && electron-builder --linux",
     "build:dev": "tsc && vite build --mode development && electron-builder",
     "test:form-hydration": "node --experimental-strip-types --test src/components/formHydration.test.ts",
     "test:sync": "node --experimental-strip-types --test electron/cloudSubmissionParse.test.ts electron/downloadBatch.test.ts electron/submissionSyncCore.test.ts electron/taxonomyStorage.test.ts src/components/pendingDrafts.test.ts src/components/submissionSyncRefresh.test.ts",

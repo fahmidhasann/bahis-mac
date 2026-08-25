@@ -28,10 +28,10 @@ This skill needs no virtual machine, desktop app or screen automation. Every wri
 bahis
 ```
 
-One command, every machine. It resolves through `PATH` to the launcher for that platform -
-`cli.sh` on macOS and Linux, `bahis.cmd` on Windows - so nothing in this file is machine- or
-OS-specific. If `bahis` is not found, the CLI has not been installed on that machine; say so
-and stop rather than guessing at a path.
+One command, every machine. npm puts `bahis` on `PATH` when the CLI is installed, on macOS,
+Windows and Linux alike, so nothing in this file is machine- or OS-specific. If `bahis` is not
+found, the CLI has not been installed on that machine; say so and stop rather than guessing at
+a path.
 
 **Read stdout, not stderr.** Every command prints JSON to stdout and nothing else. Warnings and errors go to stderr as `{"error": ..., "command": ...}`.
 
